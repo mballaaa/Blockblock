@@ -1,1 +1,5 @@
 .venv
+.private_key
+.public_key
+.ethereum_address
+.env

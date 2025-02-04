@@ -1,204 +1,157 @@
 services:
-  geth:
-    image: ethereum/client-go:stable
-    container_name: ETH-archive
-    restart: unless-stopped
-    ports:
-      - 30303:30303
-      - 30303:30303/udp
-      - 8545:8545
-      - 8546:8546
-      - 8551:8551
-    volumes:
-      - /tmp/data/geth:/root/.ethereum
-      - ./geth/geth-config.toml:/config.toml
-    stop_signal: SIGINT
-    stop_grace_period: 1m
-    healthcheck:
-      test: [ "CMD-SHELL", "geth attach --exec eth.blockNumber" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    command:
-      - --config=/config.toml
-      - --rpc.allow-unprotected-txs
-      - --snapshot=false
-      - --gcmode=archive
-      - --http
-      - --http.api=eth,net,web3,engine,admin
-      - --http.addr=0.0.0.0
-      - --http.vhosts=*
-      - --http.corsdomain=*
-      - --ws
-      - --ws.origins=*
-      - --ws.addr=0.0.0.0
-      - --ws.api=eth,net,web3
-      - --graphql
-      - --graphql.corsdomain=*
-      - --graphql.vhosts=*
-      - --authrpc.addr=0.0.0.0
-      - --authrpc.vhosts=*
-      - --authrpc.jwtsecret=/root/.ethereum/jwt.hex
-      - --authrpc.port=8551
-      - --cache=42738   # should be 34% of RAM
-
-  prysm:
-    image: gcr.io/prysmaticlabs/prysm/beacon-chain
-    container_name: prysm-beaconchain
-    restart: unless-stopped
-    stop_grace_period: 1m
-    volumes:
-      - /tmp/data/prysm:/data
-      - /tmp/data/geth/jwt.hex:/geth/jwt.hex
-    depends_on:
-      geth:
-        condition: service_healthy
-    ports:
-      - 4000:4000
-      - 3500:3500
-    command:
-      - --accept-terms-of-use
-      - --datadir=/data
-      - --disable-monitoring
-      - --rpc-host=0.0.0.0
-      - --execution-endpoint=http://geth:8551
-      - --jwt-secret=/geth/jwt.hex
-      - --rpc-host=0.0.0.0
-      - --rpc-port=4000
-      - --grpc-gateway-corsdomain=*
-      - --grpc-gateway-host=0.0.0.0
-      - --grpc-gateway-port=3500
-      - --min-sync-peers=7
-      - --historical-slasher-node=true
-      - --checkpoint-sync-url=https://sync.invis.tools
-      - --genesis-beacon-api-url=https://sync.invis.tools
-      - --suggested-fee-recipient=${SUGGESTED_FEE_RECIPIENT}
-
-  kafka1:
-    image: confluentinc/cp-kafka:7.3.2
-    hostname: kafka1
-    container_name: kafka1
-    ports:
-      - "9092:9092"
-      - "29092:29092"
-      - "9999:9999"
-    environment:
-      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka1:19092,EXTERNAL://${DOCKER_HOST_IP:-127.0.0.1}:9092,DOCKER://host.docker.internal:29092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,DOCKER:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
-      KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
-      KAFKA_BROKER_ID: 1
-      KAFKA_LOG4J_LOGGERS: "kafka.controller=INFO,kafka.producer.async.DefaultEventHandler=INFO,state.change.logger=INFO"
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-      KAFKA_JMX_PORT: 9999
-      KAFKA_JMX_HOSTNAME: ${DOCKER_HOST_IP:-127.0.0.1}
-      KAFKA_AUTHORIZER_CLASS_NAME: kafka.security.authorizer.AclAuthorizer
-      KAFKA_ALLOW_EVERYONE_IF_NO_ACL_FOUND: "true"
-    depends_on:
-      - zookeeper
-
-  # kafka2:
-  #   image: confluentinc/cp-kafka:7.3.2
-  #   hostname: kafka2
-  #   container_name: kafka2
+  # geth:
+  #   image: ethereum/client-go:stable
+  #   container_name: ETH-archive
+  #   restart: unless-stopped
   #   ports:
-  #     - "9093:9093"
-  #     - "29093:29093"
-  #     - "9998:9998"
+  #     - 30303:30303
+  #     - 30303:30303/udp
+  #     - 8545:8545
+  #     - 8546:8546
+  #     - 8551:8551
+  #   volumes:
+  #     - /tmp/data/geth:/root/.ethereum
+  #     - ./geth/geth-config.toml:/config.toml
+  #   stop_signal: SIGINT
+  #   stop_grace_period: 1m
+  #   healthcheck:
+  #     test: [ "CMD-SHELL", "geth attach --exec eth.blockNumber" ]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+  #   command:
+  #     - --config=/config.toml
+  #     - --rpc.allow-unprotected-txs
+  #     - --snapshot=false
+  #     - --gcmode=archive
+  #     - --http
+  #     - --http.api=eth,net,web3,engine,admin
+  #     - --http.addr=0.0.0.0
+  #     - --http.vhosts=*
+  #     - --http.corsdomain=*
+  #     - --ws
+  #     - --ws.origins=*
+  #     - --ws.addr=0.0.0.0
+  #     - --ws.api=eth,net,web3
+  #     - --graphql
+  #     - --graphql.corsdomain=*
+  #     - --graphql.vhosts=*
+  #     - --authrpc.addr=0.0.0.0
+  #     - --authrpc.vhosts=*
+  #     - --authrpc.jwtsecret=/root/.ethereum/jwt.hex
+  #     - --authrpc.port=8551
+  #     - --cache=42738   # should be 34% of RAM
+
+  # prysm:
+  #   image: gcr.io/prysmaticlabs/prysm/beacon-chain
+  #   container_name: prysm-beaconchain
+  #   restart: unless-stopped
+  #   stop_grace_period: 1m
+  #   volumes:
+  #     - /tmp/data/prysm:/data
+  #     - /tmp/data/geth/jwt.hex:/geth/jwt.hex
+  #   depends_on:
+  #     geth:
+  #       condition: service_healthy
+  #   ports:
+  #     - 4000:4000
+  #     - 3500:3500
+  #   command:
+  #     - --accept-terms-of-use
+  #     - --datadir=/data
+  #     - --disable-monitoring
+  #     - --rpc-host=0.0.0.0
+  #     - --execution-endpoint=http://geth:8551
+  #     - --jwt-secret=/geth/jwt.hex
+  #     - --rpc-host=0.0.0.0
+  #     - --rpc-port=4000
+  #     - --grpc-gateway-corsdomain=*
+  #     - --grpc-gateway-host=0.0.0.0
+  #     - --grpc-gateway-port=3500
+  #     - --min-sync-peers=7
+  #     - --historical-slasher-node=true
+  #     - --checkpoint-sync-url=https://sync.invis.tools
+  #     - --genesis-beacon-api-url=https://sync.invis.tools
+  #     - --suggested-fee-recipient=${SUGGESTED_FEE_RECIPIENT}
+
+  # kafka1:
+  #   image: confluentinc/cp-kafka:7.3.2
+  #   hostname: kafka1
+  #   container_name: kafka1
+  #   ports:
+  #     - "9092:9092"
+  #     - "29092:29092"
+  #     - "9999:9999"
   #   environment:
-  #     KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka1:19093,EXTERNAL://${DOCKER_HOST_IP:-127.0.0.1}:9093,DOCKER://host.docker.internal:29093
+  #     KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka1:19092,EXTERNAL://${DOCKER_HOST_IP:-127.0.0.1}:9092,DOCKER://host.docker.internal:29092
   #     KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,DOCKER:PLAINTEXT
   #     KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
   #     KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
-  #     KAFKA_BROKER_ID: 2
+  #     KAFKA_BROKER_ID: 1
   #     KAFKA_LOG4J_LOGGERS: "kafka.controller=INFO,kafka.producer.async.DefaultEventHandler=INFO,state.change.logger=INFO"
   #     KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
   #     KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
   #     KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-  #     KAFKA_JMX_PORT: 9998
+  #     KAFKA_JMX_PORT: 9999
   #     KAFKA_JMX_HOSTNAME: ${DOCKER_HOST_IP:-127.0.0.1}
   #     KAFKA_AUTHORIZER_CLASS_NAME: kafka.security.authorizer.AclAuthorizer
   #     KAFKA_ALLOW_EVERYONE_IF_NO_ACL_FOUND: "true"
   #   depends_on:
   #     - zookeeper
 
-  # kafka3:
-  #   image: confluentinc/cp-kafka:7.3.2
-  #   hostname: kafka3
-  #   container_name: kafka3
-  #   ports:
-  #     - "9094:9094"
-  #     - "29094:29094"
-  #     - "9997:9997"
-  #   environment:
-  #     KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka1:19094,EXTERNAL://${DOCKER_HOST_IP:-127.0.0.1}:9094,DOCKER://host.docker.internal:29094
-  #     KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,DOCKER:PLAINTEXT
-  #     KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
-  #     KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
-  #     KAFKA_BROKER_ID: 3
-  #     KAFKA_LOG4J_LOGGERS: "kafka.controller=INFO,kafka.producer.async.DefaultEventHandler=INFO,state.change.logger=INFO"
-  #     KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-  #     KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-  #     KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-  #     KAFKA_JMX_PORT: 9997
-  #     KAFKA_JMX_HOSTNAME: ${DOCKER_HOST_IP:-127.0.0.1}
-  #     KAFKA_AUTHORIZER_CLASS_NAME: kafka.security.authorizer.AclAuthorizer
-  #     KAFKA_ALLOW_EVERYONE_IF_NO_ACL_FOUND: "true"
+
+  # kafka-ui:
+  #   container_name: kafka-ui
+  #   image: provectuslabs/kafka-ui:latest
   #   depends_on:
-  #     - zookeeper
+  #     - kafka1
+  #     # - kafka2
+  #     # - kafka3
+  #   ports:
+  #     - 8080:8080
+  #   environment:
+  #     KAFKA_CLUSTERS_0_NAME: local
+  #     KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka1:19092 #,kafka2:19093,kafka3:19094
+  #     DYNAMIC_CONFIG_ENABLED: 'true'
 
-  kafka-ui:
-    container_name: kafka-ui
-    image: provectuslabs/kafka-ui:latest
-    depends_on:
-      - kafka1
-      # - kafka2
-      # - kafka3
-    ports:
-      - 8080:8080
-    environment:
-      KAFKA_CLUSTERS_0_NAME: local
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka1:19092 #,kafka2:19093,kafka3:19094
-      DYNAMIC_CONFIG_ENABLED: 'true'
+  # # zookeeper
+  # zookeeper:
+  #   image: confluentinc/cp-zookeeper:7.3.2
+  #   hostname: zookeeper
+  #   container_name: zookeeper
+  #   ports:
+  #     - "2181:2181"
+  #   environment:
+  #     ZOOKEEPER_CLIENT_PORT: 2181
+  #     ZOOKEEPER_SERVER_ID: 1
+  #     ZOOKEEPER_SERVERS: zookeeper:2888:3888
 
-  # zookeeper
-  zookeeper:
-    image: confluentinc/cp-zookeeper:7.3.2
-    hostname: zookeeper
-    container_name: zookeeper
-    ports:
-      - "2181:2181"
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_SERVER_ID: 1
-      ZOOKEEPER_SERVERS: zookeeper:2888:3888
-
-  # frontend nextjs
-  frontend:
-    image: node:alpine3.20
-    container_name: frontend
-    volumes:
-      - ./app:/app
-    ports:
-      - "3000:3000"
-    working_dir: /app
-    command: sh -c "yarn install && yarn dev"
-    depends_on:
-      - kafka1
-      # - kafka2
-      # - kafka3
-      - geth
-      - prysm
+  # # frontend nextjs
+  # frontend:
+  #   image: node:alpine3.20
+  #   container_name: frontend
+  #   volumes:
+  #     - ./app:/app
+  #   ports:
+  #     - "3000:3000"
+  #   working_dir: /app
+  #   command: sh -c "yarn install && yarn dev"
+  #   depends_on:
+  #     - kafka1
+  #     # - kafka2
+  #     # - kafka3
+  #     - geth
+  #     - prysm
   
-  # TimescaleDB
+  # # TimescaleDB
   timescaledb:
     image: timescale/timescaledb:2.4.1-pg13
     container_name: timescaledb
     restart: unless-stopped
     ports:
       - "5432:5432"
+    env_file:
+      - .env
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
@@ -212,37 +165,63 @@ services:
       timeout: 5s
       retries: 5
   
-  connector:
-    image: aliarbak/ethereum-connector
-    restart: unless-stopped
-    depends_on:
-      - kafka1
-      # - kafka2
-      # - kafka3
-      - timescaledb
-    ports:
-      - 8081:80
-    environment:
-      DATA_SOURCE: postgres
-      DATA_SOURCE_POSTGRES_CONNECTION_STRING: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@timescaledb:5432/${POSTGRES_DB}
-      DATA_SOURCE_PERSIST_RAW_TRANSACTION_LOGS: true
-      DESTINATION: kafka
-      DESTINATION_KAFKA_BOOTSTRAP_SERVERS: kafka1:19092 #,kafka2:9093,kafka3:9094
-      DESTINATION_KAFKA_BLOCKS_TOPIC_NAME: blocks
-      DESTINATION_KAFKA_TRANSACTIONS_TOPIC_NAME: transactions
-      DESTINATION_KAFKA_TRANSACTION_LOGS_TOPIC_NAME: transaction_logs
-      DESTINATION_KAFKA_RAW_TRANSACTION_LOGS_TOPIC_NAME: raw_transaction_logs
-      DESTINATION_KAFKA_SEND_TRANSACTION_LOGS_TO_ALIAS_TOPICS: true
+  # connector:
+  #   image: aliarbak/ethereum-connector
+  #   restart: unless-stopped
+  #   depends_on:
+  #     - kafka1
+  #     # - kafka2
+  #     # - kafka3
+  #     - timescaledb
+  #   ports:
+  #     - 8081:80
+  #   environment:
+  #     DATA_SOURCE: postgres
+  #     DATA_SOURCE_POSTGRES_CONNECTION_STRING: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@timescaledb:5432/${POSTGRES_DB}
+  #     DATA_SOURCE_PERSIST_RAW_TRANSACTION_LOGS: true
+  #     DESTINATION: kafka
+  #     DESTINATION_KAFKA_BOOTSTRAP_SERVERS: kafka1:19092 #,kafka2:9093,kafka3:9094
+  #     DESTINATION_KAFKA_BLOCKS_TOPIC_NAME: blocks
+  #     DESTINATION_KAFKA_TRANSACTIONS_TOPIC_NAME: transactions
+  #     DESTINATION_KAFKA_TRANSACTION_LOGS_TOPIC_NAME: transaction_logs
+  #     DESTINATION_KAFKA_RAW_TRANSACTION_LOGS_TOPIC_NAME: raw_transaction_logs
+  #     DESTINATION_KAFKA_SEND_TRANSACTION_LOGS_TO_ALIAS_TOPICS: true
   
-  # Adminer
-  adminer:
-    image: adminer
-    container_name: adminer
+
+  backend:
+    build: ./backend
+    container_name: backend
     restart: unless-stopped
     ports:
-      - 9090:8080
+      - "8080:8080"
     depends_on:
       - timescaledb
+      
+    environment:
+     
+      SPRING_DATASOURCE_URL: jdbc:postgresql://timescaledb:5432/${POSTGRES_DB}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      
+  
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "5050:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
+    depends_on:
+      - timescaledb
+    
 
 networks:
   default:

@@ -9,9 +9,11 @@ services:
       - 8545:8545
       - 8546:8546
       - 8551:8551
+      - 6060:6060
     volumes:
       - /tmp/data/geth:/root/.ethereum
       - ./geth/geth-config.toml:/config.toml
+      - ./geth/jwt.hex:/root/.ethereum/jwt.hex
     stop_signal: SIGINT
     stop_grace_period: 1m
     healthcheck:
@@ -40,7 +42,8 @@ services:
       - --authrpc.vhosts=*
       - --authrpc.jwtsecret=/root/.ethereum/jwt.hex
       - --authrpc.port=8551
-      - --cache=42738   # should be 34% of RAM
+      - --cache=4096   # should be 34% of RAM
+    mem_limit: 10g
 
   prysm:
     image: gcr.io/prysmaticlabs/prysm/beacon-chain
@@ -49,7 +52,7 @@ services:
     stop_grace_period: 1m
     volumes:
       - /tmp/data/prysm:/data
-      - /tmp/data/geth/jwt.hex:/geth/jwt.hex
+      - ./geth/jwt.hex:/geth/jwt.hex
     depends_on:
       geth:
         condition: service_healthy
@@ -73,6 +76,7 @@ services:
       - --checkpoint-sync-url=https://sync.invis.tools
       - --genesis-beacon-api-url=https://sync.invis.tools
       - --suggested-fee-recipient=${SUGGESTED_FEE_RECIPIENT}
+    mem_limit: 10g
 
   kafka1:
     image: confluentinc/cp-kafka:7.3.2
@@ -99,70 +103,6 @@ services:
     depends_on:
       - zookeeper
 
-  # kafka2:
-  #   image: confluentinc/cp-kafka:7.3.2
-  #   hostname: kafka2
-  #   container_name: kafka2
-  #   ports:
-  #     - "9093:9093"
-  #     - "29093:29093"
-  #     - "9998:9998"
-  #   environment:
-  #     KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka1:19093,EXTERNAL://${DOCKER_HOST_IP:-127.0.0.1}:9093,DOCKER://host.docker.internal:29093
-  #     KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,DOCKER:PLAINTEXT
-  #     KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
-  #     KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
-  #     KAFKA_BROKER_ID: 2
-  #     KAFKA_LOG4J_LOGGERS: "kafka.controller=INFO,kafka.producer.async.DefaultEventHandler=INFO,state.change.logger=INFO"
-  #     KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-  #     KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-  #     KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-  #     KAFKA_JMX_PORT: 9998
-  #     KAFKA_JMX_HOSTNAME: ${DOCKER_HOST_IP:-127.0.0.1}
-  #     KAFKA_AUTHORIZER_CLASS_NAME: kafka.security.authorizer.AclAuthorizer
-  #     KAFKA_ALLOW_EVERYONE_IF_NO_ACL_FOUND: "true"
-  #   depends_on:
-  #     - zookeeper
-
-  # kafka3:
-  #   image: confluentinc/cp-kafka:7.3.2
-  #   hostname: kafka3
-  #   container_name: kafka3
-  #   ports:
-  #     - "9094:9094"
-  #     - "29094:29094"
-  #     - "9997:9997"
-  #   environment:
-  #     KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka1:19094,EXTERNAL://${DOCKER_HOST_IP:-127.0.0.1}:9094,DOCKER://host.docker.internal:29094
-  #     KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,DOCKER:PLAINTEXT
-  #     KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
-  #     KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
-  #     KAFKA_BROKER_ID: 3
-  #     KAFKA_LOG4J_LOGGERS: "kafka.controller=INFO,kafka.producer.async.DefaultEventHandler=INFO,state.change.logger=INFO"
-  #     KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-  #     KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-  #     KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-  #     KAFKA_JMX_PORT: 9997
-  #     KAFKA_JMX_HOSTNAME: ${DOCKER_HOST_IP:-127.0.0.1}
-  #     KAFKA_AUTHORIZER_CLASS_NAME: kafka.security.authorizer.AclAuthorizer
-  #     KAFKA_ALLOW_EVERYONE_IF_NO_ACL_FOUND: "true"
-  #   depends_on:
-  #     - zookeeper
-
-  kafka-ui:
-    container_name: kafka-ui
-    image: provectuslabs/kafka-ui:latest
-    depends_on:
-      - kafka1
-      # - kafka2
-      # - kafka3
-    ports:
-      - 8080:8080
-    environment:
-      KAFKA_CLUSTERS_0_NAME: local
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka1:19092 #,kafka2:19093,kafka3:19094
-      DYNAMIC_CONFIG_ENABLED: 'true'
-
   # zookeeper
   zookeeper:
     image: confluentinc/cp-zookeeper:7.3.2
@@ -175,22 +115,20 @@ services:
       ZOOKEEPER_SERVER_ID: 1
       ZOOKEEPER_SERVERS: zookeeper:2888:3888
 
-  # frontend nextjs
-  frontend:
-    image: node:alpine3.20
-    container_name: frontend
-    volumes:
-      - ./app:/app
-    ports:
-      - "3000:3000"
-    working_dir: /app
-    command: sh -c "yarn install && yarn dev"
-    depends_on:
-      - kafka1
-      # - kafka2
-      # - kafka3
-      - geth
-      - prysm
+#   # frontend nextjs
+#   frontend:
+#     image: node:alpine3.20
+#     container_name: frontend
+#     volumes:
+#       - ./app:/app
+#     ports:
+#       - "3000:3000"
+#     working_dir: /app
+#     command: sh -c "yarn install && yarn dev"
+#     depends_on:
+#       - kafka1
+#       - geth
+#       - prysm
   
   # TimescaleDB
   timescaledb:
@@ -212,37 +150,144 @@ services:
       timeout: 5s
       retries: 5
   
+  timescaledb2:
+    image: timescale/timescaledb:2.4.1-pg13
+    container_name: timescaledb2
+    restart: unless-stopped
+    ports:
+      - "5433:5433"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB_DESTINATION}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      PGUSER: ${POSTGRES_USER}
+      PGPORT: 5433
+    volumes:
+      - /tmp/data/timescaledb2:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d ${POSTGRES_DB_DESTINATION}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   connector:
     image: aliarbak/ethereum-connector
     restart: unless-stopped
     depends_on:
       - kafka1
-      # - kafka2
-      # - kafka3
       - timescaledb
     ports:
       - 8081:80
     environment:
       DATA_SOURCE: postgres
       DATA_SOURCE_POSTGRES_CONNECTION_STRING: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@timescaledb:5432/${POSTGRES_DB}
-      DATA_SOURCE_PERSIST_RAW_TRANSACTION_LOGS: true
+      DATA_SOURCE_PERSIST_RAW_TRANSACTION_LOGS: false
+      # DESTINATION: kafka
+      # DESTINATION_KAFKA_BOOTSTRAP_SERVERS: kafka1:19092 #,kafka2:9093,kafka3:9094
+      # DESTINATION_KAFKA_BLOCKS_TOPIC_NAME: blocks
+      # DESTINATION_KAFKA_TRANSACTIONS_TOPIC_NAME: transactions
+      # DESTINATION_KAFKA_TRANSACTION_LOGS_TOPIC_NAME: transaction_logs
+      # DESTINATION_KAFKA_RAW_TRANSACTION_LOGS_TOPIC_NAME: raw_transaction_logs
+      # DESTINATION_KAFKA_SEND_TRANSACTION_LOGS_TO_ALIAS_TOPICS: true
+      DESTINATION: postgres
+      DESTINATION_POSTGRES_CONNECTION_STRING: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@timescaledb2:5433/${POSTGRES_DB_DESTINATION}
+      DESTINATION_POSTGRES_PERSIST_RAW_TRANSACTION_LOGS: true
+  
+  connector2:
+    image: aliarbak/ethereum-connector
+    restart: unless-stopped
+    depends_on:
+      - kafka1
+      - timescaledb
+    ports:
+      - 8082:80
+    environment:
+      DATA_SOURCE: postgres
+      DATA_SOURCE_POSTGRES_CONNECTION_STRING: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@timescaledb:5432/${POSTGRES_DB}
+      DATA_SOURCE_PERSIST_RAW_TRANSACTION_LOGS: false
       DESTINATION: kafka
-      DESTINATION_KAFKA_BOOTSTRAP_SERVERS: kafka1:19092 #,kafka2:9093,kafka3:9094
+      DESTINATION_KAFKA_BOOTSTRAP_SERVERS: kafka1:19092
       DESTINATION_KAFKA_BLOCKS_TOPIC_NAME: blocks
       DESTINATION_KAFKA_TRANSACTIONS_TOPIC_NAME: transactions
       DESTINATION_KAFKA_TRANSACTION_LOGS_TOPIC_NAME: transaction_logs
       DESTINATION_KAFKA_RAW_TRANSACTION_LOGS_TOPIC_NAME: raw_transaction_logs
       DESTINATION_KAFKA_SEND_TRANSACTION_LOGS_TO_ALIAS_TOPICS: true
-  
+
   # Adminer
   adminer:
     image: adminer
     container_name: adminer
     restart: unless-stopped
     ports:
-      - 9090:8080
+      - 8880:8080
     depends_on:
       - timescaledb
+
+  kafka-ui:
+    container_name: kafka-ui
+    image: provectuslabs/kafka-ui:latest
+    depends_on:
+      - kafka1
+    ports:
+      - 8080:8080
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka1:19092
+      DYNAMIC_CONFIG_ENABLED: 'true'
+
+#   prometheus:
+#     image: prom/prometheus:latest
+#     container_name: prometheus
+#     command:
+#       - '--config.file=/etc/prometheus/prometheus.yml'
+#       - '--storage.tsdb.path=/prometheus'
+#       - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+#       - '--web.console.templates=/usr/share/prometheus/consoles'
+#     ports:
+#       - 9090:9090
+#     restart: unless-stopped
+#     volumes:
+#       - ./prometheus:/etc/prometheus
+#       - prom_data:/prometheus
+#   cadvisor:
+#     image: gcr.io/cadvisor/cadvisor:latest
+#     container_name: cadvisor
+#     ports:
+#       - 8082:8080
+#     volumes:
+#       - /:/rootfs:ro
+#       - /var/run:/var/run:rw
+#       - /sys:/sys:ro
+#       - /var/lib/docker/:/var/lib/docker:ro
+  
+#   node-exporter:
+#     image: prom/node-exporter:latest
+#     container_name: node-exporter
+#     ports:
+#       - 9200:9100
+#     volumes:
+#       - /proc:/host/proc:ro
+#       - /sys:/host/sys:ro
+#       - /:/rootfs:ro
+#     command:
+#       - '--path.procfs=/host/proc'
+#       - '--path.sysfs=/host/sys'
+#       - '--collector.filesystem.ignored-mount-points="^/(sys|proc|dev|host|etc)($$|/)"'
+
+#   grafana:
+#     image: grafana/grafana:latest
+#     container_name: grafana
+#     ports:
+#       - 3001:3000
+#     volumes:
+#       - grafana_data:/var/lib/grafana
+#     environment:
+#       - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD}
+
+# volumes:
+#   prom_data: {}
+#   grafana_data: {}
+
 
 networks:
   default:

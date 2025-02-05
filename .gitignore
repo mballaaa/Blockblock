@@ -3,3 +3,4 @@
 .public_key
 .ethereum_address
 .env
+geth/jwt.hex
